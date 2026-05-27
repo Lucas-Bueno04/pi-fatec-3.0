@@ -1,0 +1,98 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: labquiz-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: labquiz123
+      MONGO_INITDB_DATABASE: labquiz_etec
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - labquiz-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: labquiz-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - labquiz-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: labquiz-backend
+    restart: unless-stopped
+    environment:
+      MONGO_HOST: mongodb
+      MONGO_PORT: "27017"
+      MONGO_USERNAME: admin
+      MONGO_PASSWORD: labquiz123
+      DB_NAME: labquiz_etec
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: labquiz-secret-key-para-producao-trocar-em-deploy-real
+      ENV: production
+      LOG_LEVEL: INFO
+      CORS_ORIGINS: "http://localhost,http://localhost:5173"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - labquiz-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: labquiz-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - labquiz-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: labquiz-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - labquiz-net
+
+volumes:
+  mongodb_data:
+  redis_data:
+
+networks:
+  labquiz-net:
+    driver: bridge
