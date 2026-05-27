@@ -1,0 +1,15 @@
+[run]
+source = app
+omit =
+    app/utils/seed.py
+    app/repositories/*
+    app/core/database.py
+    app/middleware/audit.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise NotImplementedError
+    if TYPE_CHECKING:
+    @abstractmethod
